@@ -1,9 +1,29 @@
 use std::{
-    fs::{self, DirEntry}, io::{BufReader,prelude::*}, net::{TcpListener,TcpStream}, path::Path,
+    fs::{self,}, io::{BufReader,prelude::*}, net::{TcpListener,TcpStream}, path::Path, 
 };
+use clap::Parser;
+
+#[derive(Parser,Debug)]
+struct Args{
+    //// mention port
+    #[arg(long,short)] 
+    port:Option<u16>,
+
+    //// network
+    #[arg(long,short)]
+    ip:Option<String>,
+}
+
 
 fn main() {
-    let listener = match TcpListener::bind("127.0.0.1:7878"){
+    let args:Args = Args::parse();
+    let ip = args.ip.unwrap_or("0.0.0.0".to_owned());
+    let port = args.port.unwrap_or(1245);
+
+    let addr = format!("{}:{}",ip,port);
+
+
+    let listener = match TcpListener::bind(&addr){
         Ok(listener)=>{
             listener
         },
@@ -12,6 +32,8 @@ fn main() {
             return;
         }
     };
+
+    println!("Started a local file host on {}",addr);
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
@@ -50,7 +72,8 @@ fn handle_connection(mut stream: TcpStream) {
             format!("{status_line}\r\nContent-Length: {length}\r\n Content-Type: application/octet-stream\r\n\r\n");
 
         stream.write_all(response.as_bytes()).unwrap();
-        stream.write_all(&contents);
+        stream.write_all(&contents).unwrap();
+        return;
 
     }
     
@@ -66,7 +89,7 @@ fn handle_connection(mut stream: TcpStream) {
             format!("{status_line}\r\nContent-Length: {length}\r\n Content-Type: application/octet-stream\r\n\r\n");
 
         stream.write_all(response.as_bytes()).unwrap();
-        stream.write_all(&contents);
+        stream.write_all(&contents).unwrap();
     } else if path.is_dir(){
         // serve directory
         let contents = make_dir_content(path);
@@ -82,7 +105,6 @@ fn handle_connection(mut stream: TcpStream) {
 }
 
 fn make_dir_content(path:&Path)->String{
-    assert!(path.is_dir());
     let head = r#"<!DOCTYPE HTML>
         <html lang="en">
         <head>
