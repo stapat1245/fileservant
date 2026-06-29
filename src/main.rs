@@ -14,7 +14,13 @@ struct Args{
     ip:Option<String>,
 }
 
-
+const NOT_FOUND: &str = r#"<!DOCTYPE html>
+<html>
+<head><title>404</title></head>
+<body>
+<h1>404 Not Found</h1>
+</body>
+</html>"#;
 fn main() {
     let args:Args = Args::parse();
     let ip = args.ip.unwrap_or("0.0.0.0".to_owned());
@@ -48,31 +54,32 @@ fn handle_connection(mut stream: TcpStream) {
     let request_line = buf_reader.lines().next().unwrap().unwrap();
     println!("{request_line:#?}");
 
-    let path = request_line
+    let request_path = request_line
     .split_whitespace()
     .nth(1)
     .unwrap_or("/");
 
 
-    let file_path = if path == "/" {
+    let file_path = if request_path == "/" {
         "."
     } else {
-        &path[1..] 
+        &request_path[1..] 
     };
 
     let path = Path::new(file_path);
     // println!("{:?}",path);
 
     if !path.exists(){
-        let status_line = "HTTP/1.1 404 Not Found";
-        let contents = fs::read("web/404.html").unwrap();
-        let length = contents.len();
+        let response = format!(
+            "HTTP/1.1 404 Not Found\r\n\
+            Content-Length: {}\r\n\
+            Content-Type: text/html\r\n\r\n{}",
+            NOT_FOUND.len(),
+            NOT_FOUND
+        );
 
-        let response =
-            format!("{status_line}\r\nContent-Length: {length}\r\n Content-Type: application/octet-stream\r\n\r\n");
 
         stream.write_all(response.as_bytes()).unwrap();
-        stream.write_all(&contents).unwrap();
         return;
 
     }
@@ -92,7 +99,7 @@ fn handle_connection(mut stream: TcpStream) {
         stream.write_all(&contents).unwrap();
     } else if path.is_dir(){
         // serve directory
-        let contents = make_dir_content(path);
+        let contents = make_dir_content(path,request_path);
         let length = contents.len();
         let status_line = "HTTP/1.1 200 OK";
 
@@ -104,7 +111,7 @@ fn handle_connection(mut stream: TcpStream) {
     }
 }
 
-fn make_dir_content(path:&Path)->String{
+fn make_dir_content(path:&Path,url_path: &str)->String{
     let head = r#"<!DOCTYPE HTML>
         <html lang="en">
         <head>
@@ -121,6 +128,8 @@ fn make_dir_content(path:&Path)->String{
         </html>"#.to_owned();
     let mut content = String::new();
     content.push_str(&head);
+
+
     for entry in fs::read_dir(path).unwrap(){
         let entry = entry.unwrap();
 
@@ -129,8 +138,15 @@ fn make_dir_content(path:&Path)->String{
         if entry.path().is_dir(){
             name.push('/'); 
         }
+        let href = if url_path == "/" {
+            format!("/{}", name)
+        } else {
+            format!("{}/{}", url_path.trim_end_matches('/'), name)
+        };
 
-        let tag = format!(r#"<li><a href="{0}">{0}</a></li>"#,name);
+        let tag = format!(
+        r#"<li><a href="{href}">{name}</a></li>"#
+        );
         content.push_str(&tag);
     }
     content.push_str(&footer);
