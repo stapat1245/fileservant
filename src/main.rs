@@ -25,7 +25,7 @@ fn main() {
     let args:Args = Args::parse();
     let ip = args.ip.unwrap_or("0.0.0.0".to_owned());
     let port = args.port.unwrap_or(1245);
-
+ 
     let addr = format!("{}:{}",ip,port);
 
 
@@ -86,17 +86,31 @@ fn handle_connection(mut stream: TcpStream) {
     
     if path.is_file(){
         // serving file
-        let status_line = "HTTP/1.1 200 OK";
+        // let status_line = "HTTP/1.1 200 OK";
         let filename = file_path;
+        // println!("request_path = {:?}", request_path);
+        // println!("file_path    = {:?}", file_path);
+        // println!("exists       = {}", Path::new(filename).exists());
 
-        let contents = fs::read(filename).unwrap();
-        let length = contents.len();
+        match fs::read(filename) {
+            Ok(contents) => {
+                // println!("Read {} bytes", contents.len());
 
-        let response =
-            format!("{status_line}\r\nContent-Length: {length}\r\n Content-Type: application/octet-stream\r\n\r\n");
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\n\
+                    Content-Length: {}\r\n\
+                    Content-Type: application/octet-stream\r\n\r\n",
+                    contents.len()
+                );
 
-        stream.write_all(response.as_bytes()).unwrap();
-        stream.write_all(&contents).unwrap();
+                stream.write_all(response.as_bytes()).unwrap();
+                stream.write_all(&contents).unwrap();
+            }
+            Err(e) => {
+                eprintln!("fs::read({:?}) failed: {}", filename, e);
+                return;
+            }
+        }
     } else if path.is_dir(){
         // serve directory
         let contents = make_dir_content(path,request_path);

@@ -1,6 +1,6 @@
 /target
 Cargo.lock
-.gitignore
-/vendor
-/debian
+publish.md
 /.cargo
+/debian
+/vendor
