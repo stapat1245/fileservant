@@ -1,6 +1,5 @@
 /target
 Cargo.lock
-publish.md
 /.cargo
 /debian
 /vendor
